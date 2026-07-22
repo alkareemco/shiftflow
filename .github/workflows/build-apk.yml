@@ -90,43 +90,43 @@ jobs:
           echo "🔨 Starting Web App Compilation..."
 
           python3 << 'EOF_PREP_INDEX'
-import os, glob, shutil
+          import os, glob, shutil
 
-app_name = """Shiftflow"""
+          app_name = """Shiftflow"""
 
-# 1. Check if index.html exists in root, or copy from subdirectories
-if not os.path.isfile('index.html'):
-    candidates = glob.glob('./**/index.html', recursive=True)
-    candidates = [c for c in candidates if 'node_modules' not in c and 'dist' not in c and 'build' not in c and 'out' not in c]
-    if candidates:
-        shutil.copy(candidates[0], 'index.html')
-        print('📄 Copied existing index.html from:', candidates[0])
+          # 1. Check if index.html exists in root, or copy from subdirectories
+          if not os.path.isfile('index.html'):
+              candidates = glob.glob('./**/index.html', recursive=True)
+              candidates = [c for c in candidates if 'node_modules' not in c and 'dist' not in c and 'build' not in c and 'out' not in c]
+              if candidates:
+                  shutil.copy(candidates[0], 'index.html')
+                  print('📄 Copied existing index.html from:', candidates[0])
 
-# 2. If index.html is STILL missing, auto-detect React entry point and generate clean HTML5 index.html
-if not os.path.isfile('index.html'):
-    entry = ''
-    for p in ['src/main.tsx', 'src/main.jsx', 'src/main.ts', 'src/main.js', 'src/index.tsx', 'src/index.jsx', 'src/index.js', 'src/App.tsx', 'src/App.jsx']:
-        if os.path.isfile(p):
-            entry = '/' + p
-            break
+          # 2. If index.html is STILL missing, auto-detect React entry point and generate clean HTML5 index.html
+          if not os.path.isfile('index.html'):
+              entry = ''
+              for p in ['src/main.tsx', 'src/main.jsx', 'src/main.ts', 'src/main.js', 'src/index.tsx', 'src/index.jsx', 'src/index.js', 'src/App.tsx', 'src/App.jsx']:
+                  if os.path.isfile(p):
+                      entry = '/' + p
+                      break
 
-    script_tag = f'<script type="module" src="{entry}"></script>' if entry else ''
-    html_content = f'''<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{app_name}</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    {script_tag}
-  </body>
-</html>'''
-    with open('index.html', 'w', encoding='utf-8') as f:
-        f.write(html_content)
-    print('⚡ Auto-generated clean index.html linking to entry point:', entry or 'none')
-EOF_PREP_INDEX
+              script_tag = f'<script type="module" src="{entry}"></script>' if entry else ''
+              html_content = f'''<!DOCTYPE html>
+          <html lang="en">
+            <head>
+              <meta charset="UTF-8" />
+              <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+              <title>{app_name}</title>
+            </head>
+            <body>
+              <div id="root"></div>
+              {script_tag}
+            </body>
+          </html>'''
+              with open('index.html', 'w', encoding='utf-8') as f:
+                  f.write(html_content)
+              print('⚡ Auto-generated clean index.html linking to entry point:', entry or 'none')
+          EOF_PREP_INDEX
 
           if grep -q '"build":' package.json 2>/dev/null; then
             echo "📦 Running npm run build..."
@@ -160,18 +160,18 @@ EOF_PREP_INDEX
           fi
 
           python3 << 'EOF_FIX_PATHS'
-import os
-if os.path.isfile('dist/index.html'):
-    with open('dist/index.html', 'r', encoding='utf-8', errors='ignore') as f:
-        content = f.read()
-    content = content.replace('href="/assets', 'href="./assets')
-    content = content.replace('src="/assets', 'src="./assets')
-    content = content.replace('href="/"', 'href="./"')
-    content = content.replace('src="/"', 'src="./"')
-    with open('dist/index.html', 'w', encoding='utf-8') as f:
-        f.write(content)
-    print('✓ Relative asset paths updated in dist/index.html')
-EOF_FIX_PATHS
+          import os
+          if os.path.isfile('dist/index.html'):
+              with open('dist/index.html', 'r', encoding='utf-8', errors='ignore') as f:
+                  content = f.read()
+              content = content.replace('href="/assets', 'href="./assets')
+              content = content.replace('src="/assets', 'src="./assets')
+              content = content.replace('href="/"', 'href="./"')
+              content = content.replace('src="/"', 'src="./"')
+              with open('dist/index.html', 'w', encoding='utf-8') as f:
+                  f.write(content)
+              print('✓ Relative asset paths updated in dist/index.html')
+          EOF_FIX_PATHS
 
           echo "--- Contents of dist/ ---"
           ls -la dist/
@@ -180,15 +180,15 @@ EOF_FIX_PATHS
         working-directory: app
         run: |
           cat > capacitor.config.json << 'EOF_CAP_CFG'
-{
-  "appId": "com.alkareemco.shiftflow",
-  "appName": "Shiftflow",
-  "webDir": "dist",
-  "server": {
-    "androidScheme": "https"
-  }
-}
-EOF_CAP_CFG
+          {
+            "appId": "com.alkareemco.shiftflow",
+            "appName": "Shiftflow",
+            "webDir": "dist",
+            "server": {
+              "androidScheme": "https"
+            }
+          }
+          EOF_CAP_CFG
 
           npx cap add android || true
           npx cap sync android
@@ -258,66 +258,66 @@ EOF_CAP_CFG
             exit 0
           fi
           python3 << 'EOF_RESEND'
-import os, json, urllib.request
+          import os, json, urllib.request
 
-api_key = os.environ.get('RESEND_API_KEY', '')
-if not api_key:
-    exit(0)
+          api_key = os.environ.get('RESEND_API_KEY', '')
+          if not api_key:
+              exit(0)
 
-app_name = """Shiftflow"""
-status = os.environ.get('JOB_STATUS', 'unknown')
-status_icon = '✅' if status == 'success' else '❌' if status == 'failure' else '⚠️'
-status_color = '#22c55e' if status == 'success' else '#ef4444' if status == 'failure' else '#f59e0b'
-run_number = os.environ.get('RUN_NUMBER', '')
-commit_sha = os.environ.get('COMMIT_SHA', '')[:7]
-repo = os.environ.get('REPO', '')
+          app_name = """Shiftflow"""
+          status = os.environ.get('JOB_STATUS', 'unknown')
+          status_icon = '✅' if status == 'success' else '❌' if status == 'failure' else '⚠️'
+          status_color = '#22c55e' if status == 'success' else '#ef4444' if status == 'failure' else '#f59e0b'
+          run_number = os.environ.get('RUN_NUMBER', '')
+          commit_sha = os.environ.get('COMMIT_SHA', '')[:7]
+          repo = os.environ.get('REPO', '')
 
-recipients_str = """"""
-recipients = [r.strip() for r in recipients_str.split(',') if r.strip()]
-if not recipients:
-    recipients = ['build@alkareem.co']
+          recipients_str = """"""
+          recipients = [r.strip() for r in recipients_str.split(',') if r.strip()]
+          if not recipients:
+              recipients = ['build@alkareem.co']
 
-html_body = f'''
-<html>
-<body style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
-  <div style="background: #0f172a; color: white; padding: 20px; border-radius: 10px; text-align: center;">
-    <h2 style="margin: 0;">{app_name}</h2>
-    <p style="color: #94a3b8; margin: 5px 0 0;">GitHub Actions Build Notification</p>
-  </div>
-  <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin-top: 16px;">
-    <p><strong>Status:</strong> <span style="color: {status_color}; font-weight: bold;">{status_icon} {status.upper()}</span></p>
-    <p><strong>Run Number:</strong> #{run_number}</p>
-    <p><strong>Commit:</strong> <code>{commit_sha}</code></p>
-    <p><strong>Repository:</strong> {repo}</p>
-  </div>
-  <p style="font-size: 12px; color: #64748b; text-align: center; margin-top: 20px;">
-    Automated build notification for {app_name}
-  </p>
-</body>
-</html>
-'''
+          html_body = f'''
+          <html>
+          <body style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
+            <div style="background: #0f172a; color: white; padding: 20px; border-radius: 10px; text-align: center;">
+              <h2 style="margin: 0;">{app_name}</h2>
+              <p style="color: #94a3b8; margin: 5px 0 0;">GitHub Actions Build Notification</p>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin-top: 16px;">
+              <p><strong>Status:</strong> <span style="color: {status_color}; font-weight: bold;">{status_icon} {status.upper()}</span></p>
+              <p><strong>Run Number:</strong> #{run_number}</p>
+              <p><strong>Commit:</strong> <code>{commit_sha}</code></p>
+              <p><strong>Repository:</strong> {repo}</p>
+            </div>
+            <p style="font-size: 12px; color: #64748b; text-align: center; margin-top: 20px;">
+              Automated build notification for {app_name}
+            </p>
+          </body>
+          </html>
+          '''
 
-payload = {
-    'from': 'build@alkareem.co',
-    'to': recipients,
-    'subject': f'{status_icon} [{status.upper()}] {app_name} v{run_number}',
-    'html': html_body
-}
+          payload = {
+              'from': 'build@alkareem.co',
+              'to': recipients,
+              'subject': f'{status_icon} [{status.upper()}] {app_name} v{run_number}',
+              'html': html_body
+          }
 
-req = urllib.request.Request(
-    'https://api.resend.com/emails',
-    data=json.dumps(payload).encode('utf-8'),
-    headers={
-        'Authorization': f'Bearer {api_key}',
-        'Content-Type': 'application/json'
-    }
-)
+          req = urllib.request.Request(
+              'https://api.resend.com/emails',
+              data=json.dumps(payload).encode('utf-8'),
+              headers={
+                  'Authorization': f'Bearer {api_key}',
+                  'Content-Type': 'application/json'
+              }
+          )
 
-try:
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        res = json.loads(resp.read())
-        print('✅ Email sent successfully via Resend! ID:', res.get('id', 'ok'))
-except Exception as e:
-    print('⚠️ Resend email non-fatal failure:', e)
-EOF_RESEND
+          try:
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  res = json.loads(resp.read())
+                  print('✅ Email sent successfully via Resend! ID:', res.get('id', 'ok'))
+          except Exception as e:
+              print('⚠️ Resend email non-fatal failure:', e)
+          EOF_RESEND
 
