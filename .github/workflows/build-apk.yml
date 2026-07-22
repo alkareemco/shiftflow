@@ -90,7 +90,7 @@ jobs:
                 } else if (item.isFile() && /\.(tsx?|jsx?|vue|svelte)$/i.test(item.name)) {
                   try {
                     const content = fs.readFileSync(path.join(dir, item.name), "utf8");
-                    const re = /(?:import|export)\s+[\s\S]*?\s+from\s+["']([^"']+)["']|(?:import|require)\s*\(\s*["']([^"']+)["']\s*\)|import\s+["']([^"']+)["']/g;
+                    const re = /(?:import|export)\s+[\s\S]*?\s+from\s+["\x27]([^"\x27]+)["\x27]|(?:import|require)\s*\(\s*["\x27]([^"\x27]+)["\x27]\s*\)|import\s+["\x27]([^"\x27]+)["\x27]/g;
                     let m;
                     while ((m = re.exec(content)) !== null) {
                       const imp = m[1] || m[2] || m[3];
