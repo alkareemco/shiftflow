@@ -231,9 +231,10 @@ jobs:
           for f in icon.png icon.jpg icon.svg app-icon.png public/icon.png public/icon.jpg public/icon.svg public/favicon.ico favicon.ico; do
             if [ -f "$f" ]; then ICON_SRC="$f"; break; fi
           done
-          if [ -z "$ICON_SRC" ]; then
-            ICON_SRC=$(find . -maxdepth 3 ( -name "icon.png" -o -name "icon.jpg" -o -name "icon.svg" -o -name "app-icon.png" ) | head -n 1)
-          fi
+          if [ -z "$ICON_SRC" ]; then ICON_SRC=$(find . -maxdepth 3 -name "icon.png" | head -n 1); fi
+          if [ -z "$ICON_SRC" ]; then ICON_SRC=$(find . -maxdepth 3 -name "icon.jpg" | head -n 1); fi
+          if [ -z "$ICON_SRC" ]; then ICON_SRC=$(find . -maxdepth 3 -name "app-icon.png" | head -n 1); fi
+          if [ -z "$ICON_SRC" ]; then ICON_SRC=$(find . -maxdepth 3 -name "icon.svg" | head -n 1); fi
 
           if [ -n "$ICON_SRC" ] && [ -d "android/app/src/main/res" ]; then
             echo "🎨 Custom App Icon found at: $ICON_SRC. Updating Android launcher icons..."
