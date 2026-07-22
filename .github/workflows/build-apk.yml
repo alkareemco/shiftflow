@@ -89,10 +89,10 @@ jobs:
         run: |
           echo "🔨 Starting Web App Compilation..."
 
-          python3 -c "
+          python3 << 'EOF_PREP_INDEX'
 import os, glob, shutil
 
-app_name = '''Shiftflow'''
+app_name = """Shiftflow"""
 
 # 1. Check if index.html exists in root, or copy from subdirectories
 if not os.path.isfile('index.html'):
@@ -126,7 +126,7 @@ if not os.path.isfile('index.html'):
     with open('index.html', 'w', encoding='utf-8') as f:
         f.write(html_content)
     print('⚡ Auto-generated clean index.html linking to entry point:', entry or 'none')
-"
+EOF_PREP_INDEX
 
           if grep -q '"build":' package.json 2>/dev/null; then
             echo "📦 Running npm run build..."
@@ -159,17 +159,19 @@ if not os.path.isfile('index.html'):
             exit 1
           fi
 
-          python3 -c "
-with open('dist/index.html', 'r', encoding='utf-8', errors='ignore') as f:
-    content = f.read()
-content = content.replace('href="/assets', 'href="./assets')
-content = content.replace('src="/assets', 'src="./assets')
-content = content.replace('href="/', 'href="./')
-content = content.replace('src="/', 'src="./')
-with open('dist/index.html', 'w', encoding='utf-8') as f:
-    f.write(content)
-print('✓ Relative asset paths updated in dist/index.html')
-"
+          python3 << 'EOF_FIX_PATHS'
+import os
+if os.path.isfile('dist/index.html'):
+    with open('dist/index.html', 'r', encoding='utf-8', errors='ignore') as f:
+        content = f.read()
+    content = content.replace('href="/assets', 'href="./assets')
+    content = content.replace('src="/assets', 'src="./assets')
+    content = content.replace('href="/"', 'href="./"')
+    content = content.replace('src="/"', 'src="./"')
+    with open('dist/index.html', 'w', encoding='utf-8') as f:
+        f.write(content)
+    print('✓ Relative asset paths updated in dist/index.html')
+EOF_FIX_PATHS
 
           echo "--- Contents of dist/ ---"
           ls -la dist/
@@ -177,17 +179,17 @@ print('✓ Relative asset paths updated in dist/index.html')
       - name: Set up Capacitor for Android
         working-directory: app
         run: |
-          python3 -c "
-import json
-cfg = {
-    'appId': 'com.alkareemco.shiftflow',
-    'appName': '''Shiftflow''',
-    'webDir': 'dist',
-    'server': {'androidScheme': 'https'}
+          cat > capacitor.config.json << 'EOF_CAP_CFG'
+{
+  "appId": "com.alkareemco.shiftflow",
+  "appName": "Shiftflow",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
 }
-with open('capacitor.config.json', 'w') as f:
-    json.dump(cfg, f, indent=2)
-"
+EOF_CAP_CFG
+
           npx cap add android || true
           npx cap sync android
 
@@ -246,27 +248,31 @@ with open('capacitor.config.json', 'w') as f:
         if: always()
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          JOB_STATUS: ${{ job.status }}
+          RUN_NUMBER: ${{ github.run_number }}
+          COMMIT_SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
         run: |
           if [ -z "$RESEND_API_KEY" ]; then
             echo "ℹ️ RESEND_API_KEY secret not set, skipping email notification"
             exit 0
           fi
-          python3 -c "
+          python3 << 'EOF_RESEND'
 import os, json, urllib.request
 
 api_key = os.environ.get('RESEND_API_KEY', '')
 if not api_key:
     exit(0)
 
-app_name = '''Shiftflow'''
-status = '''${{ job.status }}'''
+app_name = """Shiftflow"""
+status = os.environ.get('JOB_STATUS', 'unknown')
 status_icon = '✅' if status == 'success' else '❌' if status == 'failure' else '⚠️'
 status_color = '#22c55e' if status == 'success' else '#ef4444' if status == 'failure' else '#f59e0b'
-run_number = '''${{ github.run_number }}'''
-commit_sha = '''${{ github.sha }}'''[:7]
-repo = '''${{ github.repository }}'''
+run_number = os.environ.get('RUN_NUMBER', '')
+commit_sha = os.environ.get('COMMIT_SHA', '')[:7]
+repo = os.environ.get('REPO', '')
 
-recipients_str = ''''''
+recipients_str = """"""
 recipients = [r.strip() for r in recipients_str.split(',') if r.strip()]
 if not recipients:
     recipients = ['build@alkareem.co']
@@ -313,4 +319,5 @@ try:
         print('✅ Email sent successfully via Resend! ID:', res.get('id', 'ok'))
 except Exception as e:
     print('⚠️ Resend email non-fatal failure:', e)
-"
+EOF_RESEND
+
