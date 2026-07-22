@@ -1,0 +1,6 @@
+{
+  "name": "Shift Tracker",
+  "description": "Deterministic AI Life OS and constraint scheduler for shift workers with RPG progression and real-time decision engine.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
