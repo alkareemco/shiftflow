@@ -68,33 +68,7 @@ jobs:
         working-directory: app
         run: |
           npm install --legacy-peer-deps || npm install
-
-          python3 << 'EOF_ENSURE_REACT'
-          import json, os, subprocess
-
-          if os.path.exists('package.json'):
-              try:
-                  with open('package.json', 'r') as f:
-                      pkg = json.load(f)
-                  deps = {**pkg.get('dependencies', {}), **pkg.get('devDependencies', {})}
-
-                  needed = []
-                  if 'react' not in deps:
-                      needed.append('react@^18.3.1')
-                  if 'react-dom' not in deps:
-                      needed.append('react-dom@^18.3.1')
-                  if '@vitejs/plugin-react' not in deps and '@vitejs/plugin-react-swc' not in deps:
-                      needed.append('@vitejs/plugin-react@^4.3.1')
-                  if 'vite' not in deps:
-                      needed.append('vite')
-
-                  if needed:
-                      print('⚡ Installing missing React/Vite build packages:', ' '.join(needed))
-                      subprocess.run(['npm', 'install', '--save-dev', '--legacy-peer-deps'] + needed)
-              except Exception as e:
-                  print('⚠️ Dependency check warning:', e)
-          EOF_ENSURE_REACT
-
+          python3 -c "import json, os, subprocess; pkg = json.load(open('package.json')) if os.path.exists('package.json') else {}; deps = {**pkg.get('dependencies', {}), **pkg.get('devDependencies', {})}; needed = [p for p in ['react@^18.3.1', 'react-dom@^18.3.1', '@vitejs/plugin-react@^4.3.1', 'vite@^5.4.0'] if p.split('@')[0] not in deps and not (p.startsWith('@vitejs/plugin-react') and '@vitejs/plugin-react-swc' in deps)]; (print('⚡ Installing missing React/Vite packages:', ' '.join(needed)) or subprocess.run(['npm', 'install', '--save-dev', '--legacy-peer-deps'] + needed)) if needed else None" || true
           npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 --save --legacy-peer-deps
 
       - name: Inject Environment Secrets (.env)
@@ -115,30 +89,7 @@ jobs:
         working-directory: app
         run: |
           echo "🔨 Starting Web App Compilation..."
-
-          python3 << 'EOF_PREP_INDEX'
-          import os, glob, shutil
-
-          app_name = """Shiftflow"""
-
-          # 1. Check if index.html exists in root, or copy from subdirectories
-          if not os.path.isfile('index.html'):
-              candidates = glob.glob('./**/index.html', recursive=True)
-              candidates = [c for c in candidates if 'node_modules' not in c and 'dist' not in c and 'build' not in c and 'out' not in c]
-              if candidates:
-                  shutil.copy(candidates[0], 'index.html')
-                  print('📄 Copied existing index.html from:', candidates[0])
-
-          # 2. If index.html is STILL missing, auto-detect React entry point and generate clean HTML5 index.html
-          if not os.path.isfile('index.html'):
-              entry = ''
-              for p in ['src/main.tsx', 'src/main.jsx', 'src/main.ts', 'src/main.js', 'src/index.tsx', 'src/index.jsx', 'src/index.js', 'src/App.tsx', 'src/App.jsx']:
-                  if os.path.isfile(p):
-                      entry = '/' + p
-                      break
-
-              script_tag = f'<script type="module" src="{entry}"></script>' if entry else ''
-              html_content = f"<!DOCTYPE html>
+          python3 -c "import os, glob, shutil; app_name = '''Shiftflow'''; cands = [c for c in glob.glob('./**/index.html', recursive=True) if not any(x in c for x in ['node_modules','dist','build','out'])]; (shutil.copy(cands[0], 'index.html') if cands and not os.path.isfile('index.html') else None); entry = next(( '/' + p for p in ['src/main.tsx', 'src/main.jsx', 'src/main.ts', 'src/main.js', 'src/index.tsx', 'src/index.jsx', 'src/index.js', 'src/App.tsx', 'src/App.jsx'] if os.path.isfile(p)), ''); (open('index.html', 'w', encoding='utf-8').write(f'<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -147,27 +98,16 @@ jobs:
   </head>
   <body>
     <div id="root"></div>
-    {script_tag}
+    <script type="module" src="{entry}"></script>
   </body>
-</html>"
-              with open('index.html', 'w', encoding='utf-8') as f:
-                  f.write(html_content)
-              print('⚡ Auto-generated clean index.html linking to entry point:', entry or 'none')
-
-          # 3. Auto-generate vite.config.ts if missing and React is present
-          if not os.path.isfile('vite.config.ts') and not os.path.isfile('vite.config.js') and not os.path.isfile('vite.config.mjs'):
-              v_cfg = "import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+</html>') if entry and not os.path.isfile('index.html') else None); (open('vite.config.ts', 'w', encoding='utf-8').write('import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
-  base: './',
+  base: "./",
 });
-"
-              with open('vite.config.ts', 'w', encoding='utf-8') as f:
-                  f.write(v_cfg)
-              print('⚡ Auto-generated vite.config.ts with @vitejs/plugin-react plugin')
-          EOF_PREP_INDEX
+') if not any(os.path.isfile(f) for f in ['vite.config.ts', 'vite.config.js', 'vite.config.mjs']) else None)"
 
           if grep -q '"build":' package.json 2>/dev/null; then
             echo "📦 Running npm run build..."
@@ -200,19 +140,7 @@ export default defineConfig({
             exit 1
           fi
 
-          python3 << 'EOF_FIX_PATHS'
-          import os
-          if os.path.isfile('dist/index.html'):
-              with open('dist/index.html', 'r', encoding='utf-8', errors='ignore') as f:
-                  content = f.read()
-              content = content.replace('href="/assets', 'href="./assets')
-              content = content.replace('src="/assets', 'src="./assets')
-              content = content.replace('href="/"', 'href="./"')
-              content = content.replace('src="/"', 'src="./"')
-              with open('dist/index.html', 'w', encoding='utf-8') as f:
-                  f.write(content)
-              print('✓ Relative asset paths updated in dist/index.html')
-          EOF_FIX_PATHS
+          python3 -c "import os; p='dist/index.html'; (open(p,'w',encoding='utf-8').write(open(p,'r',encoding='utf-8',errors='ignore').read().replace('href="/assets','href="./assets').replace('src="/assets','src="./assets').replace('href="/"','href="./"').replace('src="/"','src="./"')) if os.path.isfile(p) else None); print('✓ Relative asset paths updated in dist/index.html')"
 
           echo "--- Contents of dist/ ---"
           ls -la dist/
@@ -220,16 +148,7 @@ export default defineConfig({
       - name: Set up Capacitor for Android
         working-directory: app
         run: |
-          cat > capacitor.config.json << 'EOF_CAP_CFG'
-          {
-            "appId": "com.alkareemco.shiftflow",
-            "appName": "Shiftflow",
-            "webDir": "dist",
-            "server": {
-              "androidScheme": "https"
-            }
-          }
-          EOF_CAP_CFG
+          python3 -c "import json; open('capacitor.config.json', 'w').write(json.dumps({'appId': 'com.alkareemco.shiftflow', 'appName': '''Shiftflow''', 'webDir': 'dist', 'server': {'androidScheme': 'https'}}, indent=2))"
 
           npx cap add android || true
           npx cap sync android
@@ -298,67 +217,4 @@ export default defineConfig({
             echo "ℹ️ RESEND_API_KEY secret not set, skipping email notification"
             exit 0
           fi
-          python3 << 'EOF_RESEND'
-          import os, json, urllib.request
-
-          api_key = os.environ.get('RESEND_API_KEY', '')
-          if not api_key:
-              exit(0)
-
-          app_name = """Shiftflow"""
-          status = os.environ.get('JOB_STATUS', 'unknown')
-          status_icon = '✅' if status == 'success' else '❌' if status == 'failure' else '⚠️'
-          status_color = '#22c55e' if status == 'success' else '#ef4444' if status == 'failure' else '#f59e0b'
-          run_number = os.environ.get('RUN_NUMBER', '')
-          commit_sha = os.environ.get('COMMIT_SHA', '')[:7]
-          repo = os.environ.get('REPO', '')
-
-          recipients_str = """"""
-          recipients = [r.strip() for r in recipients_str.split(',') if r.strip()]
-          if not recipients:
-              recipients = ['build@alkareem.co']
-
-          html_body = f'''
-          <html>
-          <body style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
-            <div style="background: #0f172a; color: white; padding: 20px; border-radius: 10px; text-align: center;">
-              <h2 style="margin: 0;">{app_name}</h2>
-              <p style="color: #94a3b8; margin: 5px 0 0;">GitHub Actions Build Notification</p>
-            </div>
-            <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin-top: 16px;">
-              <p><strong>Status:</strong> <span style="color: {status_color}; font-weight: bold;">{status_icon} {status.upper()}</span></p>
-              <p><strong>Run Number:</strong> #{run_number}</p>
-              <p><strong>Commit:</strong> <code>{commit_sha}</code></p>
-              <p><strong>Repository:</strong> {repo}</p>
-            </div>
-            <p style="font-size: 12px; color: #64748b; text-align: center; margin-top: 20px;">
-              Automated build notification for {app_name}
-            </p>
-          </body>
-          </html>
-          '''
-
-          payload = {
-              'from': 'build@alkareem.co',
-              'to': recipients,
-              'subject': f'{status_icon} [{status.upper()}] {app_name} v{run_number}',
-              'html': html_body
-          }
-
-          req = urllib.request.Request(
-              'https://api.resend.com/emails',
-              data=json.dumps(payload).encode('utf-8'),
-              headers={
-                  'Authorization': f'Bearer {api_key}',
-                  'Content-Type': 'application/json'
-              }
-          )
-
-          try:
-              with urllib.request.urlopen(req, timeout=30) as resp:
-                  res = json.loads(resp.read())
-                  print('✅ Email sent successfully via Resend! ID:', res.get('id', 'ok'))
-          except Exception as e:
-              print('⚠️ Resend email non-fatal failure:', e)
-          EOF_RESEND
-
+          python3 -c "import os, json, urllib.request; key = os.environ.get('RESEND_API_KEY',''); exit(0) if not key else None; status = os.environ.get('JOB_STATUS','unknown'); icon = '✅' if status=='success' else '❌' if status=='failure' else '⚠️'; color = '#22c55e' if status=='success' else '#ef4444' if status=='failure' else '#f59e0b'; app = '''Shiftflow'''; run_num = os.environ.get('RUN_NUMBER',''); commit = os.environ.get('COMMIT_SHA','')[:7]; repo = os.environ.get('REPO',''); recs = [r.strip() for r in ''''''.split(',') if r.strip()] or ['build@alkareem.co']; body = f'<html><body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;"><div style="background:#0f172a;color:white;padding:20px;border-radius:10px;text-align:center;"><h2 style="margin:0;">{app}</h2><p style="color:#94a3b8;margin:5px 0 0;">GitHub Actions Build Notification</p></div><div style="background:#f8fafc;border:1px solid #e2e8f0;padding:16px;border-radius:8px;margin-top:16px;"><p><strong>Status:</strong> <span style="color:{color};font-weight:bold;">{icon} {status.upper()}</span></p><p><strong>Run Number:</strong> #{run_num}</p><p><strong>Commit:</strong> <code>{commit}</code></p><p><strong>Repository:</strong> {repo}</p></div></body></html>'; req = urllib.request.Request('https://api.resend.com/emails', data=json.dumps({'from': 'build@alkareem.co', 'to': recs, 'subject': f'{icon} [{status.upper()}] {app} v{run_num}', 'html': body}).encode('utf-8'), headers={'Authorization': f'Bearer {key}', 'Content-Type': 'application/json'}); (print('✅ Resend email sent!') if urllib.request.urlopen(req, timeout=30) else None)" || echo "⚠️ Resend email non-fatal notice"
