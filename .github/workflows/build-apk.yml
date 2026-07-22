@@ -195,10 +195,10 @@ jobs:
             const fs = require("fs");
             if (fs.existsSync("dist/index.html")) {
               let c = fs.readFileSync("dist/index.html", "utf8");
-              c = c.split("href="/assets").join("href="./assets")
-                   .split("src="/assets").join("src="./assets")
-                   .split("href="/"").join("href="./"")
-                   .split("src="/"").join("src="./"");
+              c = c.replace(/href="\/assets/g, "href=\"./assets")
+                   .replace(/src="\/assets/g, "src=\"./assets")
+                   .replace(/href="\/"/g, "href=\"./\"")
+                   .replace(/src="\/"/g, "src=\"./\"");
               fs.writeFileSync("dist/index.html", c, "utf8");
               console.log("✓ Updated relative paths in dist/index.html");
             }
