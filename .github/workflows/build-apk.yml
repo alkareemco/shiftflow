@@ -70,24 +70,57 @@ jobs:
           npm install --legacy-peer-deps || npm install
           node -e '
             const fs = require("fs");
+            const path = require("path");
             const cp = require("child_process");
-            if (!fs.existsSync("package.json")) process.exit(0);
-            try {
-              const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
-              const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-              const needed = [];
-              if (!deps["react"]) needed.push("react@^18.3.1");
-              if (!deps["react-dom"]) needed.push("react-dom@^18.3.1");
-              if (!deps["@vitejs/plugin-react"] && !deps["@vitejs/plugin-react-swc"]) needed.push("@vitejs/plugin-react@^4.3.1");
-              if (!deps["vite"]) needed.push("vite@^5.4.0");
-              if (needed.length > 0) {
-                console.log("⚡ Auto-installing required web packages:", needed.join(" "));
-                cp.execSync("npm install --save-dev --legacy-peer-deps " + needed.join(" "), { stdio: "inherit" });
-              }
-            } catch (e) {
-              console.warn("⚠️ Dependency check notice:", e.message);
+            const builtins = new Set(["fs","path","child_process","https","http","os","crypto","util","events","stream","url","assert","buffer","querystring","zlib","tls","net","readline","process"]);
+            let pkg = {};
+            if (fs.existsSync("package.json")) {
+              try { pkg = JSON.parse(fs.readFileSync("package.json", "utf8")); } catch (e) {}
             }
-          ' || true
+            const installed = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+            const scannedPkgs = new Set();
+            function scan(dir) {
+              if (!fs.existsSync(dir)) return;
+              const items = fs.readdirSync(dir, { withFileTypes: true });
+              for (const item of items) {
+                if (item.isDirectory()) {
+                  if (!["node_modules", "dist", "build", ".git", "android", "ios", "out", ".next"].includes(item.name)) {
+                    scan(path.join(dir, item.name));
+                  }
+                } else if (item.isFile() && /\.(tsx?|jsx?|vue|svelte)$/i.test(item.name)) {
+                  try {
+                    const content = fs.readFileSync(path.join(dir, item.name), "utf8");
+                    const re = /(?:import|export)\s+[\s\S]*?\s+from\s+["']([^"']+)["']|(?:import|require)\s*\(\s*["']([^"']+)["']\s*\)|import\s+["']([^"']+)["']/g;
+                    let m;
+                    while ((m = re.exec(content)) !== null) {
+                      const imp = m[1] || m[2] || m[3];
+                      if (!imp || imp.startsWith(".") || imp.startsWith("/") || imp.startsWith("node:") || imp.startsWith("http")) continue;
+                      const parts = imp.split("/");
+                      const pkgName = imp.startsWith("@") ? (parts[0] + "/" + (parts[1] || "")) : parts[0];
+                      if (pkgName && !builtins.has(pkgName)) { scannedPkgs.add(pkgName); }
+                    }
+                  } catch (e) {}
+                }
+              }
+            }
+            for (const d of ["src", "components", "app", "lib", "pages"]) scan(d);
+            scan(".");
+            const needed = [];
+            for (const p of scannedPkgs) {
+              if (!installed[p] && !fs.existsSync(path.join("node_modules", p))) {
+                needed.push(p);
+              }
+            }
+            if (!installed["react"] && !fs.existsSync("node_modules/react")) needed.push("react@^18.3.1");
+            if (!installed["react-dom"] && !fs.existsSync("node_modules/react-dom")) needed.push("react-dom@^18.3.1");
+            if (!installed["@vitejs/plugin-react"] && !installed["@vitejs/plugin-react-swc"] && !fs.existsSync("node_modules/@vitejs/plugin-react")) needed.push("@vitejs/plugin-react@^4.3.1");
+            if (!installed["vite"] && !fs.existsSync("node_modules/vite")) needed.push("vite@^5.4.0");
+            const uniqueNeeded = [...new Set(needed)];
+            if (uniqueNeeded.length > 0) {
+              console.log("⚡ Auto-installing missing scanned packages:", uniqueNeeded.join(" "));
+              try { cp.execSync("npm install --save-dev --legacy-peer-deps " + uniqueNeeded.join(" "), { stdio: "inherit" }); } catch (e) { console.warn("⚠️ Auto-install notice:", e.message); }
+            }
+          '
           npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 --save --legacy-peer-deps
 
       - name: Inject Environment Secrets (.env)
