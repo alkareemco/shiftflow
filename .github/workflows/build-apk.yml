@@ -68,7 +68,26 @@ jobs:
         working-directory: app
         run: |
           npm install --legacy-peer-deps || npm install
-          python3 -c "import json, os, subprocess; pkg = json.load(open('package.json')) if os.path.exists('package.json') else {}; deps = {**pkg.get('dependencies', {}), **pkg.get('devDependencies', {})}; needed = [p for p in ['react@^18.3.1', 'react-dom@^18.3.1', '@vitejs/plugin-react@^4.3.1', 'vite@^5.4.0'] if p.split('@')[0] not in deps and not (p.startsWith('@vitejs/plugin-react') and '@vitejs/plugin-react-swc' in deps)]; (print('⚡ Installing missing React/Vite packages:', ' '.join(needed)) or subprocess.run(['npm', 'install', '--save-dev', '--legacy-peer-deps'] + needed)) if needed else None" || true
+          node -e '
+            const fs = require("fs");
+            const cp = require("child_process");
+            if (!fs.existsSync("package.json")) process.exit(0);
+            try {
+              const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+              const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+              const needed = [];
+              if (!deps["react"]) needed.push("react@^18.3.1");
+              if (!deps["react-dom"]) needed.push("react-dom@^18.3.1");
+              if (!deps["@vitejs/plugin-react"] && !deps["@vitejs/plugin-react-swc"]) needed.push("@vitejs/plugin-react@^4.3.1");
+              if (!deps["vite"]) needed.push("vite@^5.4.0");
+              if (needed.length > 0) {
+                console.log("⚡ Auto-installing required web packages:", needed.join(" "));
+                cp.execSync("npm install --save-dev --legacy-peer-deps " + needed.join(" "), { stdio: "inherit" });
+              }
+            } catch (e) {
+              console.warn("⚠️ Dependency check notice:", e.message);
+            }
+          ' || true
           npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 --save --legacy-peer-deps
 
       - name: Inject Environment Secrets (.env)
@@ -89,25 +108,24 @@ jobs:
         working-directory: app
         run: |
           echo "🔨 Starting Web App Compilation..."
-          python3 -c "import os, glob, shutil; app_name = '''Shiftflow'''; cands = [c for c in glob.glob('./**/index.html', recursive=True) if not any(x in c for x in ['node_modules','dist','build','out'])]; (shutil.copy(cands[0], 'index.html') if cands and not os.path.isfile('index.html') else None); entry = next(( '/' + p for p in ['src/main.tsx', 'src/main.jsx', 'src/main.ts', 'src/main.js', 'src/index.tsx', 'src/index.jsx', 'src/index.js', 'src/App.tsx', 'src/App.jsx'] if os.path.isfile(p)), ''); (open('index.html', 'w', encoding='utf-8').write(f'<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{app_name}</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="{entry}"></script>
-  </body>
-</html>') if entry and not os.path.isfile('index.html') else None); (open('vite.config.ts', 'w', encoding='utf-8').write('import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
-
-export default defineConfig({
-  plugins: [react()],
-  base: "./",
-});
-') if not any(os.path.isfile(f) for f in ['vite.config.ts', 'vite.config.js', 'vite.config.mjs']) else None)"
+          node -e '
+            const fs = require("fs");
+            if (!fs.existsSync("index.html")) {
+              let entry = "";
+              const candidates = ["src/main.tsx", "src/main.jsx", "src/main.ts", "src/main.js", "src/index.tsx", "src/index.jsx", "src/index.js", "src/App.tsx", "src/App.jsx"];
+              for (const c of candidates) { if (fs.existsSync(c)) { entry = "/" + c; break; } }
+              const scriptTag = entry ? `<script type="module" src="${entry}"></script>` : "";
+              const html = `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8" />\n  <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n  <title>${"Shiftflow"}</title>\n</head>\n<body>\n  <div id="root"></div>\n  ${scriptTag}\n</body>\n</html>\n`;
+              fs.writeFileSync("index.html", html, "utf8");
+              console.log("⚡ Auto-generated index.html linking to:", entry || "none");
+            }
+            const hasVite = fs.existsSync("vite.config.ts") || fs.existsSync("vite.config.js") || fs.existsSync("vite.config.mjs");
+            if (!hasVite) {
+              const vcfg = `import { defineConfig } from "vite";\nimport react from "@vitejs/plugin-react";\n\nexport default defineConfig({\n  plugins: [react()],\n  base: "./",\n});\n`;
+              fs.writeFileSync("vite.config.ts", vcfg, "utf8");
+              console.log("⚡ Auto-generated vite.config.ts");
+            }
+          '
 
           if grep -q '"build":' package.json 2>/dev/null; then
             echo "📦 Running npm run build..."
@@ -140,7 +158,18 @@ export default defineConfig({
             exit 1
           fi
 
-          python3 -c "import os; p='dist/index.html'; (open(p,'w',encoding='utf-8').write(open(p,'r',encoding='utf-8',errors='ignore').read().replace('href="/assets','href="./assets').replace('src="/assets','src="./assets').replace('href="/"','href="./"').replace('src="/"','src="./"')) if os.path.isfile(p) else None); print('✓ Relative asset paths updated in dist/index.html')"
+          node -e '
+            const fs = require("fs");
+            if (fs.existsSync("dist/index.html")) {
+              let c = fs.readFileSync("dist/index.html", "utf8");
+              c = c.split("href="/assets").join("href="./assets")
+                   .split("src="/assets").join("src="./assets")
+                   .split("href="/"").join("href="./"")
+                   .split("src="/"").join("src="./"");
+              fs.writeFileSync("dist/index.html", c, "utf8");
+              console.log("✓ Updated relative paths in dist/index.html");
+            }
+          '
 
           echo "--- Contents of dist/ ---"
           ls -la dist/
@@ -148,7 +177,16 @@ export default defineConfig({
       - name: Set up Capacitor for Android
         working-directory: app
         run: |
-          python3 -c "import json; open('capacitor.config.json', 'w').write(json.dumps({'appId': 'com.alkareemco.shiftflow', 'appName': '''Shiftflow''', 'webDir': 'dist', 'server': {'androidScheme': 'https'}}, indent=2))"
+          node -e '
+            const fs = require("fs");
+            const capCfg = {
+              appId: "com.alkareemco.shiftflow",
+              appName: "Shiftflow",
+              webDir: "dist",
+              server: { androidScheme: "https" }
+            };
+            fs.writeFileSync("capacitor.config.json", JSON.stringify(capCfg, null, 2), "utf8");
+          '
 
           npx cap add android || true
           npx cap sync android
@@ -217,4 +255,36 @@ export default defineConfig({
             echo "ℹ️ RESEND_API_KEY secret not set, skipping email notification"
             exit 0
           fi
-          python3 -c "import os, json, urllib.request; key = os.environ.get('RESEND_API_KEY',''); exit(0) if not key else None; status = os.environ.get('JOB_STATUS','unknown'); icon = '✅' if status=='success' else '❌' if status=='failure' else '⚠️'; color = '#22c55e' if status=='success' else '#ef4444' if status=='failure' else '#f59e0b'; app = '''Shiftflow'''; run_num = os.environ.get('RUN_NUMBER',''); commit = os.environ.get('COMMIT_SHA','')[:7]; repo = os.environ.get('REPO',''); recs = [r.strip() for r in ''''''.split(',') if r.strip()] or ['build@alkareem.co']; body = f'<html><body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;"><div style="background:#0f172a;color:white;padding:20px;border-radius:10px;text-align:center;"><h2 style="margin:0;">{app}</h2><p style="color:#94a3b8;margin:5px 0 0;">GitHub Actions Build Notification</p></div><div style="background:#f8fafc;border:1px solid #e2e8f0;padding:16px;border-radius:8px;margin-top:16px;"><p><strong>Status:</strong> <span style="color:{color};font-weight:bold;">{icon} {status.upper()}</span></p><p><strong>Run Number:</strong> #{run_num}</p><p><strong>Commit:</strong> <code>{commit}</code></p><p><strong>Repository:</strong> {repo}</p></div></body></html>'; req = urllib.request.Request('https://api.resend.com/emails', data=json.dumps({'from': 'build@alkareem.co', 'to': recs, 'subject': f'{icon} [{status.upper()}] {app} v{run_num}', 'html': body}).encode('utf-8'), headers={'Authorization': f'Bearer {key}', 'Content-Type': 'application/json'}); (print('✅ Resend email sent!') if urllib.request.urlopen(req, timeout=30) else None)" || echo "⚠️ Resend email non-fatal notice"
+          node -e '
+            const https = require("https");
+            const key = process.env.RESEND_API_KEY || "";
+            if (!key) process.exit(0);
+            const status = process.env.JOB_STATUS || "unknown";
+            const icon = status === "success" ? "✅" : status === "failure" ? "❌" : "⚠️";
+            const color = status === "success" ? "#22c55e" : status === "failure" ? "#ef4444" : "#f59e0b";
+            const app = "Shiftflow";
+            const runNum = process.env.RUN_NUMBER || "";
+            const commit = (process.env.COMMIT_SHA || "").slice(0, 7);
+            const repo = process.env.REPO || "";
+            const rawRecs = "";
+            let recs = rawRecs.split(",").map(r => r.trim()).filter(Boolean);
+            if (recs.length === 0) recs = ["build@alkareem.co"];
+            const body = `<html><body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;"><div style="background:#0f172a;color:white;padding:20px;border-radius:10px;text-align:center;"><h2 style="margin:0;">${app}</h2><p style="color:#94a3b8;margin:5px 0 0;">GitHub Actions Build Notification</p></div><div style="background:#f8fafc;border:1px solid #e2e8f0;padding:16px;border-radius:8px;margin-top:16px;"><p><strong>Status:</strong> <span style="color:${color};font-weight:bold;">${icon} ${status.toUpperCase()}</span></p><p><strong>Run Number:</strong> #${runNum}</p><p><strong>Commit:</strong> <code>${commit}</code></p><p><strong>Repository:</strong> ${repo}</p></div></body></html>`;
+            const payload = JSON.stringify({
+              from: "build@alkareem.co",
+              to: recs,
+              subject: `${icon} [${status.toUpperCase()}] ${app} v${runNum}`,
+              html: body
+            });
+            const req = https.request("https://api.resend.com/emails", {
+              method: "POST",
+              headers: {
+                "Authorization": "Bearer " + key,
+                "Content-Type": "application/json",
+                "Content-Length": Buffer.byteLength(payload)
+              }
+            }, res => { console.log("✅ Resend response status:", res.statusCode); });
+            req.on("error", e => console.error("⚠️ Resend error:", e.message));
+            req.write(payload);
+            req.end();
+          ' || echo "⚠️ Resend email non-fatal notice"
