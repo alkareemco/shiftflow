@@ -138,32 +138,32 @@ jobs:
                       break
 
               script_tag = f'<script type="module" src="{entry}"></script>' if entry else ''
-              html_content = f'''<!DOCTYPE html>
-          <html lang="en">
-            <head>
-              <meta charset="UTF-8" />
-              <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-              <title>{app_name}</title>
-            </head>
-            <body>
-              <div id="root"></div>
-              {script_tag}
-            </body>
-          </html>'''
+              html_content = f"<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{app_name}</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    {script_tag}
+  </body>
+</html>"
               with open('index.html', 'w', encoding='utf-8') as f:
                   f.write(html_content)
               print('⚡ Auto-generated clean index.html linking to entry point:', entry or 'none')
 
           # 3. Auto-generate vite.config.ts if missing and React is present
           if not os.path.isfile('vite.config.ts') and not os.path.isfile('vite.config.js') and not os.path.isfile('vite.config.mjs'):
-              v_cfg = """import { defineConfig } from 'vite';
+              v_cfg = "import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
   base: './',
 });
-"""
+"
               with open('vite.config.ts', 'w', encoding='utf-8') as f:
                   f.write(v_cfg)
               print('⚡ Auto-generated vite.config.ts with @vitejs/plugin-react plugin')
