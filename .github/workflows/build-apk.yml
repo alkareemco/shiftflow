@@ -68,7 +68,34 @@ jobs:
         working-directory: app
         run: |
           npm install --legacy-peer-deps || npm install
-          npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 --save
+
+          python3 << 'EOF_ENSURE_REACT'
+          import json, os, subprocess
+
+          if os.path.exists('package.json'):
+              try:
+                  with open('package.json', 'r') as f:
+                      pkg = json.load(f)
+                  deps = {**pkg.get('dependencies', {}), **pkg.get('devDependencies', {})}
+
+                  needed = []
+                  if 'react' not in deps:
+                      needed.append('react@^18.3.1')
+                  if 'react-dom' not in deps:
+                      needed.append('react-dom@^18.3.1')
+                  if '@vitejs/plugin-react' not in deps and '@vitejs/plugin-react-swc' not in deps:
+                      needed.append('@vitejs/plugin-react@^4.3.1')
+                  if 'vite' not in deps:
+                      needed.append('vite')
+
+                  if needed:
+                      print('⚡ Installing missing React/Vite build packages:', ' '.join(needed))
+                      subprocess.run(['npm', 'install', '--save-dev', '--legacy-peer-deps'] + needed)
+              except Exception as e:
+                  print('⚠️ Dependency check warning:', e)
+          EOF_ENSURE_REACT
+
+          npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 --save --legacy-peer-deps
 
       - name: Inject Environment Secrets (.env)
         working-directory: app
@@ -126,6 +153,20 @@ jobs:
               with open('index.html', 'w', encoding='utf-8') as f:
                   f.write(html_content)
               print('⚡ Auto-generated clean index.html linking to entry point:', entry or 'none')
+
+          # 3. Auto-generate vite.config.ts if missing and React is present
+          if not os.path.isfile('vite.config.ts') and not os.path.isfile('vite.config.js') and not os.path.isfile('vite.config.mjs'):
+              v_cfg = """import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+  base: './',
+});
+"""
+              with open('vite.config.ts', 'w', encoding='utf-8') as f:
+                  f.write(v_cfg)
+              print('⚡ Auto-generated vite.config.ts with @vitejs/plugin-react plugin')
           EOF_PREP_INDEX
 
           if grep -q '"build":' package.json 2>/dev/null; then
